@@ -36,3 +36,6 @@ tqdm
 loguru
 matplotlib
 seaborn
+uvicorn
+multipart
+dotenv

@@ -2,8 +2,8 @@
 
 # ── ChromaDB Collections ───────────────────────────────────────────────────────
 CHROMA_DIR             = "./chroma_db"
-CHROMA_COLOR_COLLECTION    = "stone_colors"       # colour feature vectors (248-dim)
-CHROMA_EMBEDDING_COLLECTION = "stone_embeddings"  # DINOv2 embeddings (256-dim)
+CHROMA_COLOR_COLLECTION    = "stone_colors_original_fold"       # colour feature vectors (248-dim)
+CHROMA_EMBEDDING_COLLECTION = "stone_embeddings_original_fold"  # DINOv2 embeddings (256-dim)
 
 # ── Model / FAISS ─────────────────────────────────────────────────────────────
 CKPT_DIR   = "./stonex_checkpoints"
