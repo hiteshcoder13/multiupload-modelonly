@@ -22,6 +22,11 @@ app = FastAPI(title="StoneX API")
 # 🔐 Your fixed token
 API_TOKEN = os.getenv("API_KEY")
 
+# ─────────────────────────────────────────────
+# CMD OFFICE MAPPING
+# ─────────────────────────────────────────────
+from cmd_mapping import resolve_family_name, is_cmd_class
+
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -32,6 +37,11 @@ def normalize_name(name: str) -> str:
 
 
 def get_best_image_from_results(family_name, model_images):
+    """
+    Find the best-scoring image for a given family from model results.
+    Matches by the raw folder name (before CMD mapping) since paths
+    on disk still use the original folder names.
+    """
     best_path = None
     best_score = -1.0
 
@@ -39,7 +49,7 @@ def get_best_image_from_results(family_name, model_images):
         parts = path.replace("\\", "/").split("/")
         fam = normalize_name(parts[-2]) if len(parts) >= 2 else ""
 
-        # match family
+        # match against raw family name (folder name on disk)
         if fam == normalize_name(family_name):
             if score > best_score:
                 best_path = path
@@ -49,7 +59,7 @@ def get_best_image_from_results(family_name, model_images):
 
 
 # ─────────────────────────────────────────────
-# API ENDPOINT
+# API ENDPOINT: /predict
 # ─────────────────────────────────────────────
 
 @app.post("/predict")
@@ -65,7 +75,6 @@ async def predict(
             raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
 
         token = authorization.split(" ")[1]
-
         if token != API_TOKEN:
             raise HTTPException(status_code=403, detail="Invalid token")
 
@@ -84,24 +93,30 @@ async def predict(
             first_layer_fetch=60,
         )
 
-        families = results.get("families", [])[:5]
+        families     = results.get("families", [])[:5]
         model_images = results.get("images", {}).get("model", [])
 
         output = []
 
-        for family, fam_score in families:
-            img_path, img_score = get_best_image_from_results(family, model_images)
+        for raw_family, fam_score in families:
+            img_path, img_score = get_best_image_from_results(raw_family, model_images)
+
+            # ── Apply CMD Office mapping ──────────────────────────────
+            display_name = resolve_family_name(raw_family)
+            cmd_flag     = is_cmd_class(raw_family)
 
             output.append({
-                "family": family,
-                "family_score": float(fam_score),
-                "best_image": img_path,
-                "image_score": float(img_score) if img_score is not None else None
+                "family":        display_name,        # mapped stone name (or humanised original)
+                "raw_class":     raw_family,          # original model class (for debugging)
+                "is_cmd_class":  cmd_flag,            # True if this was a CMD Office internal class
+                "family_score":  float(fam_score),
+                "best_image":    img_path,
+                "image_score":   float(img_score) if img_score is not None else None,
             })
 
         return {
-            "status": "success",
-            "results": output
+            "status":  "success",
+            "results": output,
         }
 
     except HTTPException as e:
@@ -114,6 +129,10 @@ async def predict(
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
+
+# ─────────────────────────────────────────────
+# API ENDPOINT: /embedding
+# ─────────────────────────────────────────────
 
 from typing import List
 
@@ -149,15 +168,15 @@ async def get_embedding(
                 continue
 
             embeddings.append({
-                "filename": file.filename,
+                "filename":  file.filename,
                 "embedding": emb.tolist(),
-                "dimension": len(emb)
+                "dimension": len(emb),
             })
 
         return {
-            "status": "success",
-            "count": len(embeddings),
-            "results": embeddings
+            "status":  "success",
+            "count":   len(embeddings),
+            "results": embeddings,
         }
 
     except HTTPException as e:

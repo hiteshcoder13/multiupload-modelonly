@@ -7,6 +7,9 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 
+# ── CMD Office mapping ────────────────────────────────────────────────────
+from cmd_mapping import resolve_family_name, is_cmd_class
+
 st.set_page_config(
     page_title="StoneX — Family Search",
     page_icon="🪨",
@@ -54,6 +57,7 @@ h1, h2, h3 { font-family: 'Syne', sans-serif !important; }
 .badge-nonaug     { background: #1a0a2d; color: #c87fff; border: 1px solid #5a008a; }
 .badge-fixed      { background: #0a1a0a; color: #7fff6f; border: 1px solid #2e6600; }
 .badge-supplement { background: #1a0a1a; color: #ff88ff; border: 1px solid #8a008a; }
+.badge-cmd        { background: #1a1000; color: #ffc94d; border: 1px solid #7a5000; }
 
 .query-card {
     background: #141414;
@@ -249,6 +253,7 @@ h1, h2, h3 { font-family: 'Syne', sans-serif !important; }
 .chip-top2    { background: #0a1a2d; color: #7fc8ff; border: 1px solid #003e8a; }
 .chip-fixed   { background: #0a1a0a; color: #7fff6f; border: 1px solid #2e6600; }
 .chip-supplement { background: #1a0a1a; color: #ff88ff; border: 1px solid #8a008a; }
+.chip-cmd     { background: #1a1000; color: #ffc94d; border: 1px solid #7a5000; }
 
 /* Multi-image result separator */
 .image-result-header {
@@ -308,6 +313,28 @@ KAGGLE_PATH_PREFIX = "/kaggle/input/datasets/hunny2006/stonex/Minimal-AUG-balanc
 
 IMAGE_EXTENSIONS   = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
 layer_order        = ["model"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DISPLAY HELPER
+# Centralises all name → display-name resolution so every place in the UI
+# uses the same logic.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def display_name(raw_family: str) -> str:
+    """
+    Return the human-readable stone name for a raw model class name.
+
+    - CMD Office classes  → mapped stone name  (e.g. "Golden Spider")
+    - Everything else     → underscores → spaces  (unchanged behaviour)
+    """
+    return resolve_family_name(raw_family)
+
+
+def cmd_badge_html(raw_family: str) -> str:
+    """Return an HTML badge if the family is a CMD Office class, else ''."""
+    if is_cmd_class(raw_family):
+        return ""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -730,12 +757,14 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             f'<div class="section-header">🏆 Top {top_k_families} Stone Families</div>',
             unsafe_allow_html=True,
         )
-        for rank, (family, score) in enumerate(results["families"], 1):
-            bar = max(0.0, min(1.0, float(score)))
+        for rank, (raw_fam, score) in enumerate(results["families"], 1):
+            bar          = max(0.0, min(1.0, float(score)))
+            disp         = display_name(raw_fam)
+            cmd_badge    = cmd_badge_html(raw_fam)
             st.markdown(
                 f'<div class="family-card">'
                 f'<span class="rank-num">#{rank}</span>'
-                f'<span class="family-name">{family.replace("_", " ")}</span>'
+                f'<span class="family-name">{disp} {cmd_badge}</span>'
                 f'<span class="score-num">{score:.4f}</span>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -766,13 +795,14 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
         raw_imgs_all   = results["images"].get("model", [])
 
         top5_cols = st.columns(5)
-        for col_idx, (family, fam_score) in enumerate(top5_families):
+        for col_idx, (raw_fam, fam_score) in enumerate(top5_families):
             col      = top5_cols[col_idx]
-            fam_norm = normalize_name(family)
+            fam_norm = normalize_name(raw_fam)
+            disp     = display_name(raw_fam)
 
             col.markdown(
                 f'<div class="family-col-header">'
-                f'#{col_idx + 1}<br>{family.replace("_", " ")}'
+                f'#{col_idx + 1}<br>{disp}'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -788,9 +818,9 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                     best_path, best_score = lp, s
 
             if best_path is None:
-                fam_folder = find_folder_for_family(family, LOCAL_PATH_PREFIX)
+                fam_folder = find_folder_for_family(raw_fam, LOCAL_PATH_PREFIX)
                 if fam_folder is None:
-                    fam_folder = find_folder_for_family(family, DATASET_ROOT)
+                    fam_folder = find_folder_for_family(raw_fam, DATASET_ROOT)
                 if fam_folder:
                     candidates = get_images_from_folder(fam_folder)
                     non_aug    = [
@@ -843,9 +873,10 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             if not layer_fams:
                 st.caption("No per-layer data available.")
             else:
-                for rank, (fam, sc) in enumerate(layer_fams[:top_k_families], 1):
-                    bar = max(0.0, min(1.0, float(sc)))
-                    st.progress(bar, text=f"#{rank}  {fam.replace('_', ' ')}  ({sc:.4f})")
+                for rank, (raw_fam, sc) in enumerate(layer_fams[:top_k_families], 1):
+                    bar  = max(0.0, min(1.0, float(sc)))
+                    disp = display_name(raw_fam)
+                    st.progress(bar, text=f"#{rank}  {disp}  ({sc:.4f})")
 
     # ── Model matched images ───────────────────────────────────────────────
     if show_model_images:
@@ -873,11 +904,13 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
 
             def model_label(item):
                 path, score = item
-                parts  = str(path).replace("\\", "/").split("/")
-                family = parts[-2].replace("_", " ") if len(parts) >= 2 else "unknown"
-                fname  = parts[-1]
+                parts      = str(path).replace("\\", "/").split("/")
+                raw_fam    = parts[-2] if len(parts) >= 2 else "unknown"
+                disp       = display_name(raw_fam)
+                badge      = cmd_badge_html(raw_fam)
+                fname      = parts[-1]
                 return (
-                    f'🏷 <b style="color:#ffa86f">{family}</b><br>'
+                    f'🏷 <b style="color:#ffa86f">{disp}</b> {badge}<br>'
                     f'📄 {fname}<br>'
                     f'<span style="color:#ffa86f">score: {score:.4f}</span>'
                 )
@@ -899,15 +932,16 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
         except Exception: pass
         return results
 
-    top1_name, top1_score = families_ranked[0]
-    top1_folder = find_folder_for_family(top1_name, LOCAL_PATH_PREFIX)
+    top1_raw, top1_score = families_ranked[0]
+    top1_disp  = display_name(top1_raw)
+    top1_folder = find_folder_for_family(top1_raw, LOCAL_PATH_PREFIX)
     if top1_folder is None:
-        top1_folder = find_folder_for_family(top1_name, DATASET_ROOT)
+        top1_folder = find_folder_for_family(top1_raw, DATASET_ROOT)
 
     if top1_folder is None:
         st.warning(
             f"⚠️  Could not locate a folder matching "
-            f"**{top1_name.replace('_', ' ')}**."
+            f"**{top1_disp}**."
         )
         try: os.remove(temp_path)
         except Exception: pass
@@ -938,7 +972,7 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             st.markdown(
                 f'<div class="info-box-teal">'
                 f'🔒 <b style="color:#00e5ff">Fixed Family Mode</b> — '
-                f'<b style="color:#00e5ff">{top1_name.replace("_", " ")}</b> '
+                f'<b style="color:#00e5ff">{top1_disp}</b> '
                 f'has only <b style="color:#00e5ff">{top1_count}</b> non-aug images '
                 f'(threshold: {fixed_family_threshold}).<br>'
                 f'→ All <b style="color:#7fff6f">{top1_count} top-1</b> images shown, '
@@ -951,7 +985,7 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             st.markdown(
                 f'<div class="info-box">'
                 f'<span class="source-chip chip-fixed">🔒 Fixed</span>'
-                f' <b style="color:#7fff6f">{top1_name.replace("_", " ")}</b>'
+                f' <b style="color:#7fff6f">{top1_disp}</b>'
                 f' &nbsp;·&nbsp; <b style="color:#7fff6f">{top1_count}</b> non-aug images<br>'
                 f'<span style="font-size:0.74rem;color:#555;">{top1_folder}</span>'
                 f'</div>',
@@ -989,13 +1023,15 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
-                            _top1_name_copy = top1_name  # capture for closure
-                            def fixed_label(item, _n=_top1_name_copy):
+                            _top1_disp_copy = top1_disp
+                            _top1_raw_copy  = top1_raw
+                            def fixed_label(item, _d=_top1_disp_copy, _r=_top1_raw_copy):
                                 path, emb_score = item
                                 fname = os.path.basename(path)
+                                badge = cmd_badge_html(_r)
                                 return (
                                     f'<span class="source-chip chip-fixed">🔒 Fixed</span> '
-                                    f'<b style="color:#7fff6f">{_n.replace("_", " ")}</b><br>'
+                                    f'<b style="color:#7fff6f">{_d}</b> {badge}<br>'
                                     f'📄 {fname}<br>'
                                     f'<span style="color:#6fbfff">emb: {emb_score:.4f}</span>'
                                 )
@@ -1021,13 +1057,14 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             if len(families_ranked) < 2:
                 st.info("No top-2 family available for supplement.")
             else:
-                top2_name, _ = families_ranked[1]
-                top2_folder  = find_folder_for_family(top2_name, LOCAL_PATH_PREFIX)
+                top2_raw, _  = families_ranked[1]
+                top2_disp    = display_name(top2_raw)
+                top2_folder  = find_folder_for_family(top2_raw, LOCAL_PATH_PREFIX)
                 if top2_folder is None:
-                    top2_folder = find_folder_for_family(top2_name, DATASET_ROOT)
+                    top2_folder = find_folder_for_family(top2_raw, DATASET_ROOT)
 
                 if top2_folder is None:
-                    st.warning(f"⚠️  Could not locate folder for top-2 family **{top2_name.replace('_', ' ')}**.")
+                    st.warning(f"⚠️  Could not locate folder for top-2 family **{top2_disp}**.")
                 else:
                     top2_nonaug = get_nonaug_images_from_folder(top2_folder)
                     top2_count  = len(top2_nonaug)
@@ -1035,7 +1072,7 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                     st.markdown(
                         f'<div class="info-box">'
                         f'<span class="source-chip chip-supplement">➕ Supplement</span>'
-                        f' <b style="color:#ff88ff">{top2_name.replace("_", " ")}</b>'
+                        f' <b style="color:#ff88ff">{top2_disp}</b>'
                         f' &nbsp;·&nbsp; <b style="color:#ff88ff">{top2_count}</b> non-aug images'
                         f'</div>',
                         unsafe_allow_html=True,
@@ -1067,13 +1104,15 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
-                            _top2_name_copy = top2_name
-                            def rgb_label_t2(item, _n=_top2_name_copy):
+                            _top2_disp_copy = top2_disp
+                            _top2_raw_copy  = top2_raw
+                            def rgb_label_t2(item, _d=_top2_disp_copy, _r=_top2_raw_copy):
                                 path, score = item
                                 fname = os.path.basename(path)
+                                badge = cmd_badge_html(_r)
                                 return (
                                     f'<span class="source-chip chip-supplement">➕</span> '
-                                    f'<b style="color:#ff88ff">{_n.replace("_", " ")}</b><br>'
+                                    f'<b style="color:#ff88ff">{_d}</b> {badge}<br>'
                                     f'📄 {fname}<br>'
                                     f'<span style="color:#7fff6f">rgb: {score:.4f}</span>'
                                 )
@@ -1106,14 +1145,16 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                                         f'</div>',
                                         unsafe_allow_html=True,
                                     )
-                                    _top2_name_copy2 = top2_name
-                                    def emb_label_t2(item, _n=_top2_name_copy2, _lu=rgb_lookup_t2):
+                                    _top2_disp_copy2 = top2_disp
+                                    _top2_raw_copy2  = top2_raw
+                                    def emb_label_t2(item, _d=_top2_disp_copy2, _r=_top2_raw_copy2, _lu=rgb_lookup_t2):
                                         path, emb_score = item
                                         fname = os.path.basename(path)
                                         r_s   = _lu.get(path, 0.0)
+                                        badge = cmd_badge_html(_r)
                                         return (
                                             f'<span class="source-chip chip-supplement">➕</span> '
-                                            f'<b style="color:#ff88ff">{_n.replace("_", " ")}</b><br>'
+                                            f'<b style="color:#ff88ff">{_d}</b> {badge}<br>'
                                             f'📄 {fname}<br>'
                                             f'<span style="color:#6fbfff">emb: {emb_score:.4f}</span>'
                                             f'&nbsp;&nbsp;<span style="color:#7fff6f">rgb: {r_s:.4f}</span>'
@@ -1129,7 +1170,7 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             st.markdown(
                 f'<div class="info-box-purple">'
                 f'📊 <b style="color:#c87fff">Standard Mode</b> — '
-                f'<b style="color:#c87fff">{top1_name.replace("_", " ")}</b> '
+                f'<b style="color:#c87fff">{top1_disp}</b> '
                 f'has <b style="color:#c87fff">{top1_count}</b> non-aug images '
                 f'(≥ threshold of {fixed_family_threshold}).<br>'
                 f'Pipeline: RGB colour filter (keep {nonaug_std_rgb_keep}) → '
@@ -1140,7 +1181,7 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
             st.markdown(
                 f'<div class="info-box">'
                 f'<span class="source-chip chip-top1">Top-1</span>'
-                f' <b style="color:#c87fff">{top1_name.replace("_", " ")}</b>'
+                f' <b style="color:#c87fff">{top1_disp}</b>'
                 f' &nbsp;·&nbsp; <b style="color:#c87fff">{top1_count}</b> non-aug images<br>'
                 f'<span style="font-size:0.74rem;color:#555;">{top1_folder}</span>'
                 f'</div>',
@@ -1172,13 +1213,15 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                     f'</div>',
                     unsafe_allow_html=True,
                 )
-                _top1_std_copy = top1_name
-                def nonaug_rgb_label_std(item, _n=_top1_std_copy):
+                _top1_std_disp = top1_disp
+                _top1_std_raw  = top1_raw
+                def nonaug_rgb_label_std(item, _d=_top1_std_disp, _r=_top1_std_raw):
                     path, score = item
                     fname = os.path.basename(path)
+                    badge = cmd_badge_html(_r)
                     return (
                         f'<span class="source-chip chip-top1">Top-1</span> '
-                        f'<b style="color:#c87fff">{_n.replace("_", " ")}</b><br>'
+                        f'<b style="color:#c87fff">{_d}</b> {badge}<br>'
                         f'📄 {fname}<br>'
                         f'<span style="color:#7fff6f">rgb: {score:.4f}</span>'
                     )
@@ -1220,14 +1263,16 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
                             f'</div>',
                             unsafe_allow_html=True,
                         )
-                        _top1_std_copy2 = top1_name
-                        def nonaug_emb_label_std(item, _n=_top1_std_copy2, _lu=rgb_lookup_std):
+                        _top1_std_disp2 = top1_disp
+                        _top1_std_raw2  = top1_raw
+                        def nonaug_emb_label_std(item, _d=_top1_std_disp2, _r=_top1_std_raw2, _lu=rgb_lookup_std):
                             path, emb_score = item
                             fname = os.path.basename(path)
                             r_s   = _lu.get(path, 0.0)
+                            badge = cmd_badge_html(_r)
                             return (
                                 f'<span class="source-chip chip-top1">Top-1</span> '
-                                f'<b style="color:#c87fff">{_n.replace("_", " ")}</b><br>'
+                                f'<b style="color:#c87fff">{_d}</b> {badge}<br>'
                                 f'📄 {fname}<br>'
                                 f'<span style="color:#6fbfff">emb: {emb_score:.4f}</span>'
                                 f'&nbsp;&nbsp;<span style="color:#7fff6f">rgb: {r_s:.4f}</span>'
@@ -1241,7 +1286,7 @@ def process_single_image(uploaded_file, img_index: int, n_total: int):
     with tab_all:
         st.markdown(
             f'<div class="info-box">'
-            f'📁 <b style="color:#c9a96e">{top1_name.replace("_", " ")}</b>'
+            f'📁 <b style="color:#c9a96e">{top1_disp}</b>'
             f' &nbsp;·&nbsp; {len(all_candidates)} images in folder<br>'
             f'<span style="font-size:0.76rem;color:#555;">{top1_folder}</span>'
             f'</div>',
@@ -1351,15 +1396,12 @@ for img_idx, uploaded_file in enumerate(uploaded_files):
     filename = getattr(uploaded_file, "name", f"image_{img_idx+1}")
 
     if n_images > 1:
-        # Use expander for each image when multiple are uploaded
         label = f"Image #{img_idx+1} — {filename}"
-        # First image expanded by default, rest collapsed
         with st.expander(label, expanded=(img_idx == 0)):
             result = process_single_image(uploaded_file, img_idx, n_images)
             if result:
                 all_results[filename] = result
     else:
-        # Single image: render directly without expander
         result = process_single_image(uploaded_file, img_idx, n_images)
         if result:
             all_results[filename] = result
@@ -1375,14 +1417,18 @@ if n_images > 1 and all_results:
     summary_data = []
     for fname, res in all_results.items():
         families = res.get("families", [])
-        top1 = families[0] if families else ("—", 0.0)
-        top2 = families[1] if len(families) > 1 else ("—", 0.0)
+        # Use display_name for summary table too
+        top1_raw = families[0][0] if families else "—"
+        top1_sc  = families[0][1] if families else 0.0
+        top2_raw = families[1][0] if len(families) > 1 else "—"
+        top2_sc  = families[1][1] if len(families) > 1 else 0.0
+
         summary_data.append({
-            "File": fname,
-            "Top-1 Family": top1[0].replace("_", " "),
-            "Score": f"{top1[1]:.4f}",
-            "Top-2 Family": top2[0].replace("_", " "),
-            "Score (2)": f"{top2[1]:.4f}",
+            "File":          fname,
+            "Top-1 Family":  display_name(top1_raw) if top1_raw != "—" else "—",
+            "Score":         f"{top1_sc:.4f}",
+            "Top-2 Family":  display_name(top2_raw) if top2_raw != "—" else "—",
+            "Score (2)":     f"{top2_sc:.4f}",
         })
 
     import pandas as pd
