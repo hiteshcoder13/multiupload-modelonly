@@ -317,22 +317,13 @@ layer_order        = ["model"]
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DISPLAY HELPER
-# Centralises all name → display-name resolution so every place in the UI
-# uses the same logic.
 # ══════════════════════════════════════════════════════════════════════════════
 
 def display_name(raw_family: str) -> str:
-    """
-    Return the human-readable stone name for a raw model class name.
-
-    - CMD Office classes  → mapped stone name  (e.g. "Golden Spider")
-    - Everything else     → underscores → spaces  (unchanged behaviour)
-    """
     return resolve_family_name(raw_family)
 
 
 def cmd_badge_html(raw_family: str) -> str:
-    """Return an HTML badge if the family is a CMD Office class, else ''."""
     if is_cmd_class(raw_family):
         return ""
 
@@ -501,17 +492,6 @@ with st.sidebar:
     st.markdown('<div class="subtitle">Stone family visual search</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("### ⚙️ Pipeline")
-    st.markdown(
-        '<div class="pipeline-flow">'
-        '<span class="layer-badge badge-model">🧠 Model</span> → '
-        '<span class="layer-badge badge-rgb">🎨 RGB Filter</span> → '
-        '<span class="layer-badge badge-embedding">🔬 Embedding Rerank</span>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("---")
     st.markdown("### 🎛️ Model controls")
     top_k_families    = st.slider("Top-K families",            1,  30, 10, 1)
     top_k_images      = st.slider("Top-K images (model layer)", 4,  60, 12, 4)
@@ -614,13 +594,7 @@ with st.sidebar:
 
 st.markdown('<div class="main-title">🪨 StoneX</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtitle">'
-    '<span class="layer-badge badge-model">🧠 Model</span>'
-    '<span style="color:#444"> → </span>'
-    '<span class="layer-badge badge-rgb">🎨 RGB Filter</span>'
-    '<span style="color:#444"> → </span>'
-    '<span class="layer-badge badge-embedding">🔬 Embedding Rerank</span>'
-    '</div>',
+    '<div class="subtitle">Stone family visual search</div>',
     unsafe_allow_html=True,
 )
 
@@ -1417,7 +1391,6 @@ if n_images > 1 and all_results:
     summary_data = []
     for fname, res in all_results.items():
         families = res.get("families", [])
-        # Use display_name for summary table too
         top1_raw = families[0][0] if families else "—"
         top1_sc  = families[0][1] if families else 0.0
         top2_raw = families[1][0] if len(families) > 1 else "—"
